@@ -1,10 +1,23 @@
 'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+
 export default function Home() {
+  const [id, setId] = useState('')
+  const router = useRouter()
+
+  const handleVerify = () => {
+    const trimmed = id.trim()
+    if (trimmed) router.push(`/p/${trimmed}`)
+  }
+
   return (
     <main style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       justifyContent: 'center', minHeight: '100vh', padding: '2rem',
-      fontFamily: "'SF Mono', 'JetBrains Mono', monospace"
+      fontFamily: "'SF Mono', 'JetBrains Mono', monospace",
+      background: '#0a0a0a'
     }}>
       <div style={{ maxWidth: 480, width: '100%', textAlign: 'center' }}>
         <div style={{ fontSize: 11, letterSpacing: '0.2em', color: '#555', marginBottom: 24 }}>
@@ -17,13 +30,11 @@ export default function Home() {
           증명 링크를 통해 접속하거나,<br />
           아래에 proof_id를 직접 입력하세요.
         </p>
-        <form action="" onSubmit={(e) => {
-          e.preventDefault()
-          const id = (e.currentTarget.elements.namedItem('id') as HTMLInputElement).value.trim()
-          if (id) window.location.href = `/p/${id}`
-        }} style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
           <input
-            name="id"
+            value={id}
+            onChange={(e) => setId(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
             placeholder="proof_id (UUID)"
             style={{
               flex: 1, background: '#111', border: '1px solid rgba(255,255,255,0.08)',
@@ -31,14 +42,17 @@ export default function Home() {
               fontSize: 12, fontFamily: 'inherit', outline: 'none'
             }}
           />
-          <button type="submit" style={{
-            background: '#f0f0f0', color: '#0a0a0a', border: 'none',
-            borderRadius: 6, padding: '10px 18px', fontSize: 12,
-            fontFamily: 'inherit', cursor: 'pointer', fontWeight: 500
-          }}>
+          <button
+            onClick={handleVerify}
+            style={{
+              background: '#f0f0f0', color: '#0a0a0a', border: 'none',
+              borderRadius: 6, padding: '10px 18px', fontSize: 12,
+              fontFamily: 'inherit', cursor: 'pointer', fontWeight: 500
+            }}
+          >
             검증
           </button>
-        </form>
+        </div>
       </div>
     </main>
   )
