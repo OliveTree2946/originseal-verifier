@@ -72,7 +72,7 @@ function isBase64(str: string): boolean {
 // ─── SHA-256 (ADR-018 공식: SHA256(UTF8(hexString))) ────────
 async function sha256Hex(hexString: string): Promise<string> {
   const bytes = new TextEncoder().encode(hexString)
-  const hash = await crypto.subtle.digest('SHA-256', bytes)
+  const hash = await crypto.subtle.digest('SHA-256', bytes.buffer as ArrayBuffer)
   return bytesToHex(new Uint8Array(hash))
 }
 
@@ -112,7 +112,7 @@ export async function verifySignatureV1(
   try {
     const pubKeyDer = base64ToBytes(publicKeyB64)
     const key = await crypto.subtle.importKey(
-      'spki', pubKeyDer,
+      'spki', pubKeyDer.buffer as ArrayBuffer,
       { name: 'ECDSA', namedCurve: 'P-256' },
       false, ['verify']
     )
@@ -136,7 +136,7 @@ export async function verifySignatureV1(
     const messageBytes = new TextEncoder().encode(anchorRecordHex)
     const valid = await crypto.subtle.verify(
       { name: 'ECDSA', hash: 'SHA-256' },
-      key, sigBytes, messageBytes
+      key, sigBytes.buffer as ArrayBuffer, messageBytes.buffer as ArrayBuffer
     )
 
     return {
@@ -270,9 +270,11 @@ function tlvEncode(tag: number, value: Uint8Array): Uint8Array {
 function uint64Bytes(val: number | bigint): Uint8Array {
   const buf = new Uint8Array(8)
   let n = BigInt(val)
+  const MASK = BigInt(0xff)
+  const SHIFT = BigInt(8)
   for (let i = 7; i >= 0; i--) {
-    buf[i] = Number(n & 0xffn)
-    n >>= 8n
+    buf[i] = Number(n & MASK)
+    n >>= SHIFT
   }
   return buf
 }
