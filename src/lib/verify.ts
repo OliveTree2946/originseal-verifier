@@ -203,12 +203,15 @@ export async function verifyChainV2(events: ChainEvent[]): Promise<V2Result> {
       }
     }
 
-    // Verify chain_hash = SHA256(prev || payload || seq || ts)
-    const prevHash = normalizeHex(ev.prev_hash)
-    const payloadHash = normalizeHex(ev.payload_hash)
+    // chain_hash = SHA256(UTF8(hex(prev_bytes || payload_bytes || uint32BE(seq) || utf8(ts))))
+    // 서버 _shared/verify-chain.ts 와 동일 (DataSchema v1.3 §3.3)
+    const prevBytes = hexToBytes(normalizeHex(ev.prev_hash))
+    const payloadBytes = hexToBytes(normalizeHex(ev.payload_hash))
+    const seqBytes = uint32BE(ev.seq)
     const tsForHash = ev.ts_utc_raw || ev.ts_utc
-    const preimage = `${prevHash}${payloadHash}${ev.seq}${tsForHash}`
-    const expectedChainHash = await sha256Hex(preimage)
+    const tsBytes = new TextEncoder().encode(tsForHash)
+    const combined = concatBytes(prevBytes, payloadBytes, seqBytes, tsBytes)
+    const expectedChainHash = await sha256Hex(bytesToHex(combined))
     const actualChainHash = normalizeHex(ev.chain_hash)
 
     if (expectedChainHash !== actualChainHash) {
@@ -290,6 +293,23 @@ function uint64Bytes(val: number | bigint): Uint8Array {
   return buf
 }
 
+function uint32BE(val: number): Uint8Array {
+  const buf = new Uint8Array(4)
+  buf[0] = (val >>> 24) & 0xff
+  buf[1] = (val >>> 16) & 0xff
+  buf[2] = (val >>> 8) & 0xff
+  buf[3] = val & 0xff
+  return buf
+}
+
+function concatBytes(...parts: Uint8Array[]): Uint8Array {
+  const total = parts.reduce((s, p) => s + p.length, 0)
+  const out = new Uint8Array(total)
+  let off = 0
+  for (const p of parts) { out.set(p, off); off += p.length }
+  return out
+}
+
 export interface OTPreimage {
   eh: string
   f: string
@@ -311,20 +331,35 @@ export async function verifyOT(
   try {
     const eh = hexToBytes(normalizeHex(preimage.eh))
 
+    // F field: 64-char hex takes precedence over base64 (hex chars are valid base64)
     let fBytes: Uint8Array
-    if (typeof preimage.f === 'string' && preimage.f.length > 0) {
-      fBytes = isBase64(preimage.f) ? base64ToBytes(preimage.f) : hexToBytes(normalizeHex(preimage.f))
+    const fStr = preimage.f || ''
+    if (/^[0-9a-fA-F]{64}$/.test(fStr)) {
+      fBytes = hexToBytes(fStr)
+    } else if (fStr && isBase64(fStr)) {
+      const decoded = base64ToBytes(fStr)
+      if (decoded.length === 32) {
+        fBytes = decoded
+      } else if (decoded.length === 64) {
+        const asHex = new TextDecoder().decode(decoded)
+        fBytes = /^[0-9a-fA-F]{64}$/.test(asHex) ? hexToBytes(asHex) : decoded
+      } else {
+        fBytes = decoded
+      }
     } else {
       fBytes = new Uint8Array(32)
     }
 
     const sh = hexToBytes(normalizeHex(preimage.sh))
-    const fpid = hexToBytes(normalizeHex(preimage.fpid))
-    const pv = new TextEncoder().encode(preimage.pv || 'v1.0')
+    // UUID may contain hyphens — strip before hex parse
+    const fpid = hexToBytes(normalizeHex(preimage.fpid).replace(/-/g, ''))
+    // PV padded to 4 bytes
+    const pvRaw = new TextEncoder().encode(preimage.pv || 'v1.0')
+    const pv = new Uint8Array(4); pv.set(pvRaw.slice(0, 4))
     const ts = uint64Bytes(preimage.ts)
     const ctr = uint64Bytes(preimage.ctr)
     const lh = hexToBytes(normalizeHex(preimage.lh_prev))
-    const sid = hexToBytes(normalizeHex(preimage.sid))
+    const sid = hexToBytes(normalizeHex(preimage.sid).replace(/-/g, ''))
 
     const tlvParts = [
       tlvEncode(0x01, eh), tlvEncode(0x02, fBytes), tlvEncode(0x03, sh),
