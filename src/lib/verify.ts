@@ -107,19 +107,32 @@ function derToP1363(derSig: Uint8Array): Uint8Array | null {
 export async function verifySignatureV1(
   anchorRecordHex: string,
   signatureInput: string,
-  publicKeyB64: string
+  publicKeyInput: string
 ): Promise<VerifyResult> {
   try {
-    const pubKeyDer = base64ToBytes(publicKeyB64)
+    // Public key: detect BYTEA hex (\x...) vs base64
+    let pubKeyBytes: Uint8Array
+    const cleanPub = publicKeyInput.replace(/^\\\\x|^\\x/, '')
+    if (/^[0-9a-fA-F]+$/.test(cleanPub) && cleanPub.length > 80) {
+      // BYTEA hex format
+      pubKeyBytes = hexToBytes(cleanPub)
+    } else {
+      // base64 DER SPKI format
+      pubKeyBytes = base64ToBytes(publicKeyInput)
+    }
+
     const key = await crypto.subtle.importKey(
-      'spki', pubKeyDer.buffer as ArrayBuffer,
+      'spki', pubKeyBytes.buffer as ArrayBuffer,
       { name: 'ECDSA', namedCurve: 'P-256' },
       false, ['verify']
     )
 
-    // Detect signature format: base64 or hex
+    // Signature: detect BYTEA hex (\x...) vs base64 vs plain hex
     let sigBytes: Uint8Array
-    if (isBase64(signatureInput)) {
+    const cleanSig = signatureInput.replace(/^\\\\x|^\\x/, '')
+    if (/^[0-9a-fA-F]+$/.test(cleanSig) && cleanSig.length >= 128) {
+      sigBytes = hexToBytes(cleanSig)
+    } else if (isBase64(signatureInput)) {
       sigBytes = base64ToBytes(signatureInput)
     } else {
       sigBytes = hexToBytes(signatureInput)
@@ -270,11 +283,9 @@ function tlvEncode(tag: number, value: Uint8Array): Uint8Array {
 function uint64Bytes(val: number | bigint): Uint8Array {
   const buf = new Uint8Array(8)
   let n = BigInt(val)
-  const MASK = BigInt(0xff)
-  const SHIFT = BigInt(8)
   for (let i = 7; i >= 0; i--) {
-    buf[i] = Number(n & MASK)
-    n >>= SHIFT
+    buf[i] = Number(n & 0xffn)
+    n >>= 8n
   }
   return buf
 }
