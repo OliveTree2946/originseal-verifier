@@ -73,28 +73,22 @@ export default function ProofCard({ proofId, proof, serverVerification, chainEve
   const [clientOT, setClientOT] = useState<VerifyResult | null>(null)
   const [clientRunning, setClientRunning] = useState(true)
 
-  // Client-side independent verification
   useEffect(() => {
     if (!proof) { setClientRunning(false); return }
 
     const run = async () => {
-      // V1: Signature
       if (proof.anchor_record && proof.signature && proof.public_key) {
         const r = await verifySignatureV1(
-          normalizeHex(proof.anchor_record),
-          proof.signature,
-          proof.public_key
+          normalizeHex(proof.anchor_record), proof.signature, proof.public_key
         )
         setClientV1(r)
       }
 
-      // V2: Chain continuity
       if (chainEvents && chainEvents.length > 0) {
         const r = await verifyChainV2(chainEvents)
         setClientV2(r)
       }
 
-      // V3: On-chain
       if (proof.eas_uid) {
         const r = await verifyOnChainV3(proof.eas_uid)
         setClientV3(r)
@@ -102,16 +96,11 @@ export default function ProofCard({ proofId, proof, serverVerification, chainEve
         setClientV3({ status: 'pending', detail: '앵커링 대기 중' })
       }
 
-      // OT: Recalculation
       if (proof.origin_tag_preimage && proof.origin_tag) {
         const pre: OTPreimage = typeof proof.origin_tag_preimage === 'string'
-          ? JSON.parse(proof.origin_tag_preimage)
-          : proof.origin_tag_preimage
+          ? JSON.parse(proof.origin_tag_preimage) : proof.origin_tag_preimage
         const r = await verifyOT(
-          proof.origin_tag,
-          proof.anchor_record,
-          proof.chain_continuity_hash,
-          pre
+          proof.origin_tag, proof.anchor_record, proof.chain_continuity_hash, pre
         )
         setClientOT(r)
       }
@@ -134,45 +123,42 @@ export default function ProofCard({ proofId, proof, serverVerification, chainEve
   const grade = serverVerification?.trust_grade || proof?.trust_grade
 
   return (
-    <main style={{ minHeight: '100vh', padding: '2rem 1rem', maxWidth: 600, margin: '0 auto' }}>
+    <main style={{ minHeight: '100vh', padding: '2rem 1rem', maxWidth: 620, margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ fontSize: 10, letterSpacing: '0.25em', color: '#444', marginBottom: 20 }}>
+      <div style={{ fontSize: 11, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 24 }}>
         ORIGINSEAL · PROOF VERIFIER
       </div>
 
       {/* Overall Status */}
       {overall && (
         <div style={{
-          padding: '18px 20px', borderRadius: 10, marginBottom: 20,
+          padding: '22px 24px', borderRadius: 12, marginBottom: 24,
           background: isVerified ? 'var(--green-dim)' : isPending ? 'var(--amber-dim)' : 'var(--red-dim)',
-          border: `1px solid ${isVerified ? 'var(--green)' : isPending ? 'var(--amber)' : 'var(--red)'}22`,
+          border: `1px solid ${isVerified ? 'var(--green)' : isPending ? 'var(--amber)' : 'var(--red)'}33`,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-            <span style={{ fontSize: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+            <span style={{ fontSize: 28 }}>
               {isVerified ? '✓' : isPending ? '◎' : '✗'}
             </span>
             <div>
               <div style={{
-                fontSize: 16, fontWeight: 500,
+                fontSize: 20, fontWeight: 600,
                 color: isVerified ? 'var(--green)' : isPending ? 'var(--amber)' : 'var(--red)',
               }}>
                 {isVerified ? '원본 확인됨' : isPending ? '앵커링 대기 중' : '검증 실패'}
               </div>
-              <div style={{ fontSize: 10, color: '#555', marginTop: 2, letterSpacing: '0.05em' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, letterSpacing: '0.06em' }}>
                 {overall}
               </div>
             </div>
           </div>
 
-          {/* Metadata Grid */}
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-            gap: 10, marginTop: 14,
+            gap: 12, marginTop: 16,
           }}>
             <MetaItem label="촬영 시각" value={formatTime(capturedAt)} />
-            <MetaItem label="디바이스" value={
-              `${deviceModel || '—'}${attestLevel === 0 ? ' · HW' : ''}`
-            } />
+            <MetaItem label="디바이스" value={`${deviceModel || '—'}${attestLevel === 0 ? ' · HW' : ''}`} />
             <MetaItem label="센서" value={sensorCount ? `${sensorCount}종` : '—'} />
             <MetaItem label="등급" value={grade || '—'} highlight />
           </div>
@@ -181,17 +167,9 @@ export default function ProofCard({ proofId, proof, serverVerification, chainEve
 
       {/* Server Verification */}
       <SectionLabel>서버 검증 결과</SectionLabel>
-      <div style={{ ...cardStyle, marginBottom: 16 }}>
-        <CheckRow
-          label="V1  서명 검증"
-          status={sv?.v1_signature?.status || 'skip'}
-          note={sv?.v1_signature?.detail}
-        />
-        <CheckRow
-          label="V2  해시체인 연속성"
-          status={sv?.v2_chain_continuity?.status || 'skip'}
-          note={sv?.v2_chain_continuity?.detail}
-        />
+      <div style={{ ...cardStyle, marginBottom: 20 }}>
+        <CheckRow label="V1  서명 검증" status={sv?.v1_signature?.status || 'skip'} note={sv?.v1_signature?.detail} />
+        <CheckRow label="V2  해시체인 연속성" status={sv?.v2_chain_continuity?.status || 'skip'} note={sv?.v2_chain_continuity?.detail} />
         {sv?.v2_chain_continuity?.session_summary && (
           <SessionSummary summary={sv.v2_chain_continuity.session_summary} />
         )}
@@ -201,71 +179,40 @@ export default function ProofCard({ proofId, proof, serverVerification, chainEve
           note={sv?.v3_eas_anchor?.eas_uid ? shortHex(sv.v3_eas_anchor.eas_uid, 12) : sv?.v3_eas_anchor?.detail}
           link={sv?.v3_eas_anchor?.eas_uid ? `${EASSCAN_BASE}/${sv.v3_eas_anchor.eas_uid}` : undefined}
         />
-        <CheckRow
-          label="V4  영지식 증명"
-          status={sv?.v4_zk_proof?.status || 'na'}
-          note="Phase 2"
-        />
-        <CheckRow
-          label="V5  철회 상태"
-          status={sv?.v5_revocation?.status || 'skip'}
-          note={sv?.v5_revocation?.detail}
-        />
-        <CheckRow
-          label="OT  Origin Tag"
-          status={sv?.origin_tag_check?.status || 'skip'}
-          note={sv?.origin_tag_check?.detail}
-          last
-        />
+        <CheckRow label="V4  영지식 증명" status={sv?.v4_zk_proof?.status || 'na'} note="Phase 2" />
+        <CheckRow label="V5  철회 상태" status={sv?.v5_revocation?.status || 'skip'} note={sv?.v5_revocation?.detail} />
+        <CheckRow label="OT  Origin Tag" status={sv?.origin_tag_check?.status || 'skip'} note={sv?.origin_tag_check?.detail} last />
       </div>
 
       {/* Client Independent Verification */}
       <SectionLabel>
         클라이언트 독립 검증
-        <span style={{ fontWeight: 400, fontSize: 9, color: '#333', marginLeft: 8 }}>
+        <span style={{ fontWeight: 400, fontSize: 10, color: 'var(--text-muted)', marginLeft: 8 }}>
           서버를 신뢰하지 않는 독립 재검증
         </span>
       </SectionLabel>
-      <div style={{ ...cardStyle, marginBottom: 16 }}>
+      <div style={{ ...cardStyle, marginBottom: 20 }}>
         {clientRunning ? (
-          <div style={{ padding: '14px 16px', fontSize: 11, color: '#444' }}>
-            <span style={{ animation: 'pulse 1.5s ease-in-out infinite' }}>●</span>
+          <div style={{ padding: '16px 18px', fontSize: 12, color: 'var(--text-secondary)' }}>
+            <span style={{ animation: 'pulse 1.5s ease-in-out infinite', color: 'var(--blue)' }}>●</span>
             {' '}독립 검증 수행 중...
           </div>
         ) : (
           <>
-            <CheckRow
-              label="V1  브라우저 서명 검증"
-              status={clientV1?.status || 'skip'}
-              note={clientV1?.detail}
-            />
-            <CheckRow
-              label="V2  해시체인 재계산"
-              status={clientV2?.status || 'skip'}
-              note={clientV2?.detail}
-            />
+            <CheckRow label="V1  브라우저 서명 검증" status={clientV1?.status || 'skip'} note={clientV1?.detail} />
+            <CheckRow label="V2  해시체인 재계산" status={clientV2?.status || 'skip'} note={clientV2?.detail} />
             {clientV2?.status === 'pass' && clientV2?.summary && (
               <SessionSummary summary={clientV2.summary} />
             )}
-            <CheckRow
-              label="V3  온체인 직접 조회"
-              status={clientV3?.status || 'skip'}
-              note={clientV3?.detail}
-              link={clientV3?.easscan_url}
-            />
-            <CheckRow
-              label="OT  브라우저 재계산"
-              status={clientOT?.status || 'skip'}
-              note={clientOT?.detail}
-              last
-            />
+            <CheckRow label="V3  온체인 직접 조회" status={clientV3?.status || 'skip'} note={clientV3?.detail} link={clientV3?.easscan_url} />
+            <CheckRow label="OT  브라우저 재계산" status={clientOT?.status || 'skip'} note={clientOT?.detail} last />
           </>
         )}
       </div>
 
       {/* Proof Details */}
       <SectionLabel>증명 상세</SectionLabel>
-      <div style={{ ...cardStyle, marginBottom: 16 }}>
+      <div style={{ ...cardStyle, marginBottom: 20 }}>
         <DetailRow label="PROOF ID" value={proofId} />
         <DetailRow label="CONTENT HASH" value={shortHex(proof?.content_hash)} />
         <DetailRow label="ANCHOR RECORD" value={shortHex(proof?.anchor_record)} />
@@ -281,19 +228,19 @@ export default function ProofCard({ proofId, proof, serverVerification, chainEve
       {serverVerification?.grade_subscores && (
         <>
           <SectionLabel>신뢰 등급 상세</SectionLabel>
-          <div style={{ ...cardStyle, marginBottom: 16, padding: '14px 16px' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ ...cardStyle, marginBottom: 20, padding: '16px 18px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
               {Object.entries(serverVerification.grade_subscores).map(([k, v]) => (
                 <span key={k} style={{
-                  padding: '4px 10px', borderRadius: 5, fontSize: 10,
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.06)',
+                  padding: '5px 12px', borderRadius: 6, fontSize: 11,
+                  background: 'var(--bg-card2)',
+                  border: '1px solid var(--border)',
                 }}>
-                  <span style={{ color: '#555' }}>{k.replace(/_/g, ' ')}</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{k.replace(/_/g, ' ')}</span>
                   {' '}
                   <span style={{
-                    fontWeight: 600,
-                    color: v === 'A' ? 'var(--green)' : v === 'D' ? 'var(--amber)' : '#888',
+                    fontWeight: 700,
+                    color: v === 'A' ? 'var(--green)' : v === 'D' ? 'var(--amber)' : 'var(--text-secondary)',
                   }}>{v}</span>
                 </span>
               ))}
@@ -303,7 +250,7 @@ export default function ProofCard({ proofId, proof, serverVerification, chainEve
       )}
 
       {/* Footer */}
-      <div style={{ fontSize: 10, color: '#222', textAlign: 'center', paddingTop: 12 }}>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', paddingTop: 16 }}>
         Sprint 7 · Sepolia Testnet · GRANARY Works
       </div>
 
@@ -317,14 +264,14 @@ export default function ProofCard({ proofId, proof, serverVerification, chainEve
 // ─── Sub-components ─────────────────────────────────────────
 const cardStyle: React.CSSProperties = {
   background: 'var(--bg-card)', border: '1px solid var(--border)',
-  borderRadius: 10, overflow: 'hidden',
+  borderRadius: 12, overflow: 'hidden',
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
-      fontSize: 9, letterSpacing: '0.18em', color: '#444',
-      marginBottom: 8, textTransform: 'uppercase',
+      fontSize: 10, letterSpacing: '0.16em', color: 'var(--text-label)',
+      marginBottom: 10, textTransform: 'uppercase', fontWeight: 500,
     }}>
       {children}
     </div>
@@ -336,13 +283,13 @@ function MetaItem({ label, value, highlight }: {
 }) {
   return (
     <div>
-      <div style={{ fontSize: 9, color: '#444', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
         {label}
       </div>
       <div style={{
-        fontSize: highlight ? 18 : 11, marginTop: 3,
-        color: highlight ? 'var(--accent)' : '#999',
-        fontWeight: highlight ? 600 : 400,
+        fontSize: highlight ? 20 : 12, marginTop: 4,
+        color: highlight ? 'var(--accent)' : 'var(--text-secondary)',
+        fontWeight: highlight ? 700 : 400,
       }}>
         {value}
       </div>
@@ -362,23 +309,23 @@ function CheckRow({ label, status, note, link, last }: {
     fail:    { symbol: '✗', color: 'var(--red)' },
     pending: { symbol: '◎', color: 'var(--amber)' },
     error:   { symbol: '⚠', color: 'var(--amber)' },
-    skip:    { symbol: '—', color: '#333' },
-    na:      { symbol: 'N/A', color: '#333' },
+    skip:    { symbol: '—', color: 'var(--text-muted)' },
+    na:      { symbol: 'N/A', color: 'var(--text-muted)' },
   }
   const c = cfg[status] || cfg.skip
 
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 12,
-      padding: '11px 16px',
-      borderBottom: last ? 'none' : '1px solid rgba(255,255,255,0.04)',
+      display: 'flex', alignItems: 'center', gap: 14,
+      padding: '13px 18px',
+      borderBottom: last ? 'none' : '1px solid var(--border)',
     }}>
-      <span style={{ fontSize: 11, color: c.color, minWidth: 28, textAlign: 'center' }}>
+      <span style={{ fontSize: 13, color: c.color, minWidth: 30, textAlign: 'center', fontWeight: 600 }}>
         {c.symbol}
       </span>
       <span style={{
-        fontSize: 11, flex: 1,
-        color: status === 'skip' || status === 'na' ? '#444' : '#999',
+        fontSize: 13, flex: 1,
+        color: status === 'skip' || status === 'na' ? 'var(--text-muted)' : 'var(--text-primary)',
       }}>
         {label}
       </span>
@@ -386,15 +333,15 @@ function CheckRow({ label, status, note, link, last }: {
         link ? (
           <a href={link} target="_blank" rel="noopener noreferrer"
             style={{
-              fontSize: 10, color: 'var(--blue)', textAlign: 'right',
-              maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              fontSize: 11, color: 'var(--blue)', textAlign: 'right',
+              maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
             {note}
           </a>
         ) : (
           <span style={{
-            fontSize: 10, color: '#444', textAlign: 'right',
-            maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            fontSize: 11, color: 'var(--text-secondary)', textAlign: 'right',
+            maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {note}
           </span>
@@ -413,9 +360,10 @@ function SessionSummary({ summary }: {
 }) {
   return (
     <div style={{
-      padding: '8px 16px 10px 56px', fontSize: 10, color: '#444',
-      borderBottom: '1px solid rgba(255,255,255,0.04)',
-      display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px',
+      padding: '10px 18px 12px 62px', fontSize: 11, color: 'var(--text-secondary)',
+      borderBottom: '1px solid var(--border)',
+      display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 20px',
+      background: 'var(--bg-card2)',
     }}>
       <span>시작: {formatTimeSub(summary.started_at)}</span>
       <span>종료: {formatTimeSub(summary.ended_at)}</span>
@@ -436,19 +384,19 @@ function DetailRow({ label, value, link, last }: {
       {value}
     </a>
   ) : (
-    <span style={{ color: '#666', wordBreak: 'break-all', textAlign: 'right' }}>{value}</span>
+    <span style={{ color: 'var(--text-secondary)', wordBreak: 'break-all', textAlign: 'right' }}>{value}</span>
   )
 
   return (
     <div style={{
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      padding: '11px 16px', gap: 16, flexWrap: 'wrap',
-      borderBottom: last ? 'none' : '1px solid rgba(255,255,255,0.04)',
+      padding: '13px 18px', gap: 16, flexWrap: 'wrap',
+      borderBottom: last ? 'none' : '1px solid var(--border)',
     }}>
-      <span style={{ fontSize: 9, letterSpacing: '0.12em', color: '#444', flexShrink: 0 }}>
+      <span style={{ fontSize: 10, letterSpacing: '0.12em', color: 'var(--text-label)', flexShrink: 0 }}>
         {label}
       </span>
-      <span style={{ fontSize: 11 }}>{content}</span>
+      <span style={{ fontSize: 12 }}>{content}</span>
     </div>
   )
 }
