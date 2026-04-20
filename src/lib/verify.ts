@@ -20,7 +20,8 @@ export const CHAIN_CONFIG: Record<number, ChainConfig> = {
     easscanBase: 'https://sepolia.easscan.org/attestation/view',
   },
   137: {
-    rpc: 'https://polygon-rpc.com',
+    rpc: process.env.NEXT_PUBLIC_POLYGON_RPC_URL
+      ?? 'https://polygon-bor-rpc.publicnode.com',
     eas: '0x5E634ef5355f45A855d02D66eCD687b1502AF790',
     name: 'Polygon PoS',
     easscanBase: 'https://polygon.easscan.org/attestation/view',
