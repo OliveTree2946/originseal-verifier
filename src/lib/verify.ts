@@ -1,11 +1,45 @@
 // ─── OriginSeal Client-Side Verification Utilities ──────────
 // Sprint 7: 브라우저에서 독립 검증 수행 (서버를 신뢰하지 않아도 됨)
+// Sprint 9-2: 다중 체인 지원 — chain_id 기반으로 RPC/EAS/EASScan 동적 라우팅
 // ADR-018: SHA256(UTF8(hexString)) 공식 준수
 // ADR-021: 클라이언트=온체인 독립 검증
+// ADR-022: fetch + JSON-RPC eth_call만 사용 (ethers.js 번들 금지)
 
-const EAS_CONTRACT = '0xC2679fBD37d54388Ce493F1DB75320D236e1815e'
-const SEPOLIA_RPC = 'https://ethereum-sepolia-rpc.publicnode.com'
-export const EASSCAN_BASE = 'https://sepolia.easscan.org/attestation/view'
+export interface ChainConfig {
+  rpc: string
+  eas: string
+  name: string
+  easscanBase: string
+}
+
+export const CHAIN_CONFIG: Record<number, ChainConfig> = {
+  11155111: {
+    rpc: 'https://ethereum-sepolia-rpc.publicnode.com',
+    eas: '0xC2679fBD37d54388Ce493F1DB75320D236e1815e',
+    name: 'Ethereum Sepolia',
+    easscanBase: 'https://sepolia.easscan.org/attestation/view',
+  },
+  137: {
+    rpc: 'https://polygon-rpc.com',
+    eas: '0x5E634ef5355f45A855d02D66eCD687b1502AF790',
+    name: 'Polygon PoS',
+    easscanBase: 'https://polygon.easscan.org/attestation/view',
+  },
+}
+
+export function getChainConfig(chainId: number | null | undefined): ChainConfig | null {
+  if (chainId === null || chainId === undefined) return CHAIN_CONFIG[11155111]
+  return CHAIN_CONFIG[chainId] ?? null
+}
+
+export function easscanUrl(
+  chainId: number | null | undefined,
+  easUid: string | null | undefined
+): string | null {
+  if (!easUid) return null
+  const cfg = getChainConfig(chainId)
+  return cfg ? `${cfg.easscanBase}/${easUid}` : null
+}
 
 // ─── Types ──────────────────────────────────────────────────
 export interface VerifyResult {
@@ -235,20 +269,29 @@ export async function verifyChainV2(events: ChainEvent[]): Promise<V2Result> {
 }
 
 // ─── V3: EAS On-Chain Verification (ethers.js 없이 JSON-RPC 직접 호출) ──
-export async function verifyOnChainV3(easUid: string): Promise<VerifyResult> {
+// Sprint 9-2: chain_id 기반 RPC/EAS 동적 선택
+export async function verifyOnChainV3(
+  easUid: string,
+  chainId: number | null | undefined
+): Promise<VerifyResult> {
   if (!easUid) return { status: 'pending', detail: '앵커링 대기 중' }
+
+  const cfg = getChainConfig(chainId)
+  if (!cfg) {
+    return { status: 'error', detail: `Unsupported chain_id: ${chainId}` }
+  }
 
   try {
     // getAttestation(bytes32) selector = 0xa3112a64
     const uidClean = easUid.startsWith('0x') ? easUid.slice(2) : easUid
     const calldata = '0xa3112a64' + uidClean.padStart(64, '0')
 
-    const response = await fetch(SEPOLIA_RPC, {
+    const response = await fetch(cfg.rpc, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         jsonrpc: '2.0', id: 1, method: 'eth_call',
-        params: [{ to: EAS_CONTRACT, data: calldata }, 'latest'],
+        params: [{ to: cfg.eas, data: calldata }, 'latest'],
       }),
     })
 
@@ -264,8 +307,8 @@ export async function verifyOnChainV3(easUid: string): Promise<VerifyResult> {
 
     return {
       status: 'pass',
-      detail: '온체인 어테스테이션 확인됨 (Sepolia)',
-      easscan_url: `${EASSCAN_BASE}/${easUid}`,
+      detail: `온체인 어테스테이션 확인됨 (${cfg.name})`,
+      easscan_url: `${cfg.easscanBase}/${easUid}`,
     }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)

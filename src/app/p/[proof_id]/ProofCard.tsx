@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   verifySignatureV1, verifyChainV2, verifyOnChainV3, verifyOT,
-  normalizeHex, EASSCAN_BASE,
+  normalizeHex, easscanUrl,
   type VerifyResult, type V2Result, type ChainEvent, type OTPreimage,
 } from '@/lib/verify'
 
@@ -22,6 +22,7 @@ interface ServerVerification {
     v3_eas_anchor?: {
       status: string; detail?: string
       eas_uid?: string; tx_hash?: string; block_number?: number
+      chain?: string; chain_id?: number
     }
     v4_zk_proof?: { status: string; detail?: string; reason?: string }
     v5_revocation?: { status: string; detail?: string }
@@ -90,7 +91,7 @@ export default function ProofCard({ proofId, proof, serverVerification, chainEve
       }
 
       if (proof.eas_uid) {
-        const r = await verifyOnChainV3(proof.eas_uid)
+        const r = await verifyOnChainV3(proof.eas_uid, proof.chain_id ?? null)
         setClientV3(r)
       } else {
         setClientV3({ status: 'pending', detail: '앵커링 대기 중' })
@@ -177,7 +178,7 @@ export default function ProofCard({ proofId, proof, serverVerification, chainEve
           label="V3  EAS 블록체인 앵커"
           status={sv?.v3_eas_anchor?.status || 'skip'}
           note={sv?.v3_eas_anchor?.eas_uid ? shortHex(sv.v3_eas_anchor.eas_uid, 12) : sv?.v3_eas_anchor?.detail}
-          link={sv?.v3_eas_anchor?.eas_uid ? `${EASSCAN_BASE}/${sv.v3_eas_anchor.eas_uid}` : undefined}
+          link={easscanUrl(sv?.v3_eas_anchor?.chain_id ?? proof?.chain_id, sv?.v3_eas_anchor?.eas_uid) ?? undefined}
         />
         <CheckRow label="V4  영지식 증명" status={sv?.v4_zk_proof?.status || 'na'} note="Phase 2" />
         <CheckRow label="V5  철회 상태" status={sv?.v5_revocation?.status || 'skip'} note={sv?.v5_revocation?.detail} />
@@ -217,7 +218,7 @@ export default function ProofCard({ proofId, proof, serverVerification, chainEve
         <DetailRow label="CONTENT HASH" value={shortHex(proof?.content_hash)} />
         <DetailRow label="ANCHOR RECORD" value={shortHex(proof?.anchor_record)} />
         {proof?.eas_uid && (
-          <DetailRow label="EAS UID" value={shortHex(proof.eas_uid, 14)} link={`${EASSCAN_BASE}/${proof.eas_uid}`} />
+          <DetailRow label="EAS UID" value={shortHex(proof.eas_uid, 14)} link={easscanUrl(proof.chain_id, proof.eas_uid) ?? undefined} />
         )}
         {proof?.tx_hash && (
           <DetailRow label="TX HASH" value={shortHex(proof.tx_hash, 14)} last />
