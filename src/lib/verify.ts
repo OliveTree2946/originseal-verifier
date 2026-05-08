@@ -269,6 +269,25 @@ export async function verifyChainV2(events: ChainEvent[]): Promise<V2Result> {
   }
 }
 
+// ─── V3: Retry helper for transient network errors ──────────
+async function fetchWithRetry(
+  fetchFn: () => Promise<any>,
+  retries = 3,
+  delayMs = 1000
+): Promise<any> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fetchFn()
+    } catch (err) {
+      if (i < retries - 1) {
+        await new Promise((r) => setTimeout(r, delayMs))
+      } else {
+        throw err
+      }
+    }
+  }
+}
+
 // ─── V3: EAS On-Chain Verification (ethers.js 없이 JSON-RPC 직접 호출) ──
 // Sprint 9-2: chain_id 기반 RPC/EAS 동적 선택
 export async function verifyOnChainV3(
@@ -287,16 +306,16 @@ export async function verifyOnChainV3(
     const uidClean = easUid.startsWith('0x') ? easUid.slice(2) : easUid
     const calldata = '0xa3112a64' + uidClean.padStart(64, '0')
 
-    const response = await fetch(cfg.rpc, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0', id: 1, method: 'eth_call',
-        params: [{ to: cfg.eas, data: calldata }, 'latest'],
-      }),
-    })
-
-    const result = await response.json()
+    const result = await fetchWithRetry(() =>
+      fetch(cfg.rpc, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1, method: 'eth_call',
+          params: [{ to: cfg.eas, data: calldata }, 'latest'],
+        }),
+      }).then(r => r.json())
+    )
     if (result.error) {
       return { status: 'error', detail: `RPC 오류: ${result.error.message}` }
     }
