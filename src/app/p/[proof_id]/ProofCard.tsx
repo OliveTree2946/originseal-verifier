@@ -59,6 +59,26 @@ function formatTime(ts: string | null | undefined): string {
   } catch { return ts }
 }
 
+function formatKoreanTimestamp(ts: string | null | undefined): string {
+  if (!ts) return '—'
+  try {
+    const d = new Date(ts)
+    const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
+    const y = kst.getUTCFullYear()
+    const mo = String(kst.getUTCMonth() + 1).padStart(2, '0')
+    const day = String(kst.getUTCDate()).padStart(2, '0')
+    const h = String(kst.getUTCHours()).padStart(2, '0')
+    const min = String(kst.getUTCMinutes()).padStart(2, '0')
+    const s = String(kst.getUTCSeconds()).padStart(2, '0')
+    return `${y}년 ${mo}월 ${day}일 ${h}:${min}:${s}`
+  } catch { return ts ?? '—' }
+}
+
+function getDeviceLabel(model: string | null | undefined, level: number | null | undefined): string {
+  const base = model || '알 수 없는 기기'
+  return level === 0 ? `${base} · 하드웨어 서명 ✓` : `${base} · 소프트웨어 서명`
+}
+
 function shortHex(h: string | null | undefined, len = 10): string {
   if (!h) return '—'
   const clean = normalizeHex(h)
@@ -73,6 +93,7 @@ export default function ProofCard({ proofId, proof, serverVerification, chainEve
   const [clientV3, setClientV3] = useState<VerifyResult | null>(null)
   const [clientOT, setClientOT] = useState<VerifyResult | null>(null)
   const [clientRunning, setClientRunning] = useState(true)
+  const [showTechnical, setShowTechnical] = useState(false)
 
   useEffect(() => {
     if (!proof) { setClientRunning(false); return }
@@ -130,6 +151,23 @@ export default function ProofCard({ proofId, proof, serverVerification, chainEve
         ORIGINSEAL · PROOF VERIFIER
       </div>
 
+      {/* Korean Summary */}
+      {overall && (
+        <div style={{
+          padding: '20px 24px', borderRadius: 12, marginBottom: 20,
+          background: isVerified ? 'var(--green-dim)' : isPending ? 'var(--amber-dim)' : 'var(--red-dim)',
+          border: `1px solid ${isVerified ? 'var(--green)' : isPending ? 'var(--amber)' : 'var(--red)'}`,
+          fontSize: 15, lineHeight: 1.7, color: 'var(--text-primary)',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+        }}>
+          {isVerified
+            ? `✅ 이 사진은 ${formatKoreanTimestamp(capturedAt)}, ${getDeviceLabel(deviceModel, attestLevel)}에서 촬영된 원본입니다. 촬영 이후 변조된 흔적이 없으며, 블록체인에 기록되어 있습니다.`
+            : isPending
+            ? `◎ 이 사진은 블록체인 앵커링이 진행 중입니다. 잠시 후 다시 확인해 주세요.`
+            : `❌ 이 사진의 원본 검증에 실패했습니다. 변조되었거나 증명 데이터가 손상되었을 수 있습니다.`}
+        </div>
+      )}
+
       {/* Overall Status */}
       {overall && (
         <div style={{
@@ -166,50 +204,70 @@ export default function ProofCard({ proofId, proof, serverVerification, chainEve
         </div>
       )}
 
-      {/* Server Verification */}
-      <SectionLabel>서버 검증 결과</SectionLabel>
-      <div style={{ ...cardStyle, marginBottom: 20 }}>
-        <CheckRow label="V1  서명 검증" status={sv?.v1_signature?.status || 'skip'} note={sv?.v1_signature?.detail} />
-        <CheckRow label="V2  해시체인 연속성" status={sv?.v2_chain_continuity?.status || 'skip'} note={sv?.v2_chain_continuity?.detail} />
-        {sv?.v2_chain_continuity?.session_summary && (
-          <SessionSummary summary={sv.v2_chain_continuity.session_summary} />
-        )}
-        <CheckRow
-          label="V3  EAS 블록체인 앵커"
-          status={sv?.v3_eas_anchor?.status || 'skip'}
-          note={sv?.v3_eas_anchor?.eas_uid ? shortHex(sv.v3_eas_anchor.eas_uid, 12) : sv?.v3_eas_anchor?.detail}
-          link={easscanUrl(sv?.v3_eas_anchor?.chain_id ?? proof?.chain_id, sv?.v3_eas_anchor?.eas_uid) ?? undefined}
-        />
-        <CheckRow label="V4  영지식 증명" status={sv?.v4_zk_proof?.status || 'na'} note="Phase 2" />
-        <CheckRow label="V5  철회 상태" status={sv?.v5_revocation?.status || 'skip'} note={sv?.v5_revocation?.detail} />
-        <CheckRow label="OT  Origin Tag" status={sv?.origin_tag_check?.status || 'skip'} note={sv?.origin_tag_check?.detail} last />
-      </div>
+      {/* Technical Details Toggle */}
+      <button
+        onClick={() => setShowTechnical(v => !v)}
+        style={{
+          width: '100%', marginBottom: 20,
+          padding: '11px 18px',
+          background: 'var(--bg-card)', border: '1px solid var(--border)',
+          borderRadius: 10, cursor: 'pointer',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          color: 'var(--text-secondary)', fontSize: 13,
+        }}
+      >
+        <span>기술 검증 상세 보기</span>
+        <span style={{ fontSize: 11 }}>{showTechnical ? '▲' : '▼'}</span>
+      </button>
 
-      {/* Client Independent Verification */}
-      <SectionLabel>
-        클라이언트 독립 검증
-        <span style={{ fontWeight: 400, fontSize: 10, color: 'var(--text-muted)', marginLeft: 8 }}>
-          서버를 신뢰하지 않는 독립 재검증
-        </span>
-      </SectionLabel>
-      <div style={{ ...cardStyle, marginBottom: 20 }}>
-        {clientRunning ? (
-          <div style={{ padding: '16px 18px', fontSize: 12, color: 'var(--text-secondary)' }}>
-            <span style={{ animation: 'pulse 1.5s ease-in-out infinite', color: 'var(--blue)' }}>●</span>
-            {' '}독립 검증 수행 중...
-          </div>
-        ) : (
-          <>
-            <CheckRow label="V1  브라우저 서명 검증" status={clientV1?.status || 'skip'} note={clientV1?.detail} />
-            <CheckRow label="V2  해시체인 재계산" status={clientV2?.status || 'skip'} note={clientV2?.detail} />
-            {clientV2?.status === 'pass' && clientV2?.summary && (
-              <SessionSummary summary={clientV2.summary} />
+      {showTechnical && (
+        <>
+          {/* Server Verification */}
+          <SectionLabel>서버 검증 결과</SectionLabel>
+          <div style={{ ...cardStyle, marginBottom: 20 }}>
+            <CheckRow label="V1  서명 검증" status={sv?.v1_signature?.status || 'skip'} note={sv?.v1_signature?.detail} />
+            <CheckRow label="V2  해시체인 연속성" status={sv?.v2_chain_continuity?.status || 'skip'} note={sv?.v2_chain_continuity?.detail} />
+            {sv?.v2_chain_continuity?.session_summary && (
+              <SessionSummary summary={sv.v2_chain_continuity.session_summary} />
             )}
-            <CheckRow label="V3  온체인 직접 조회" status={clientV3?.status || 'skip'} note={clientV3?.detail} link={clientV3?.easscan_url} />
-            <CheckRow label="OT  브라우저 재계산" status={clientOT?.status || 'skip'} note={clientOT?.detail} last />
-          </>
-        )}
-      </div>
+            <CheckRow
+              label="V3  EAS 블록체인 앵커"
+              status={sv?.v3_eas_anchor?.status || 'skip'}
+              note={sv?.v3_eas_anchor?.eas_uid ? shortHex(sv.v3_eas_anchor.eas_uid, 12) : sv?.v3_eas_anchor?.detail}
+              link={easscanUrl(sv?.v3_eas_anchor?.chain_id ?? proof?.chain_id, sv?.v3_eas_anchor?.eas_uid) ?? undefined}
+            />
+            <CheckRow label="V4  영지식 증명" status={sv?.v4_zk_proof?.status || 'na'} note="Phase 2" />
+            <CheckRow label="V5  철회 상태" status={sv?.v5_revocation?.status || 'skip'} note={sv?.v5_revocation?.detail} />
+            <CheckRow label="OT  Origin Tag" status={sv?.origin_tag_check?.status || 'skip'} note={sv?.origin_tag_check?.detail} last />
+          </div>
+
+          {/* Client Independent Verification */}
+          <SectionLabel>
+            클라이언트 독립 검증
+            <span style={{ fontWeight: 400, fontSize: 10, color: 'var(--text-muted)', marginLeft: 8 }}>
+              서버를 신뢰하지 않는 독립 재검증
+            </span>
+          </SectionLabel>
+          <div style={{ ...cardStyle, marginBottom: 20 }}>
+            {clientRunning ? (
+              <div style={{ padding: '16px 18px', fontSize: 12, color: 'var(--text-secondary)' }}>
+                <span style={{ animation: 'pulse 1.5s ease-in-out infinite', color: 'var(--blue)' }}>●</span>
+                {' '}독립 검증 수행 중...
+              </div>
+            ) : (
+              <>
+                <CheckRow label="V1  브라우저 서명 검증" status={clientV1?.status || 'skip'} note={clientV1?.detail} />
+                <CheckRow label="V2  해시체인 재계산" status={clientV2?.status || 'skip'} note={clientV2?.detail} />
+                {clientV2?.status === 'pass' && clientV2?.summary && (
+                  <SessionSummary summary={clientV2.summary} />
+                )}
+                <CheckRow label="V3  온체인 직접 조회" status={clientV3?.status || 'skip'} note={clientV3?.detail} link={clientV3?.easscan_url} />
+                <CheckRow label="OT  브라우저 재계산" status={clientOT?.status || 'skip'} note={clientOT?.detail} last />
+              </>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Proof Details */}
       <SectionLabel>증명 상세</SectionLabel>
