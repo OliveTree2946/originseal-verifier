@@ -310,7 +310,7 @@ export default function ProofCard({ proofId, proof, serverVerification, chainEve
 
       {/* Footer */}
       <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', paddingTop: 16 }}>
-        Sprint 7 · Sepolia Testnet · GRANARY Works
+        {`Sprint 9 · ${process.env.NEXT_PUBLIC_EAS_NETWORK === 'mainnet' ? 'Polygon Mainnet' : 'Sepolia Testnet'} · GRANARY Works`}
       </div>
 
       <style>{`
