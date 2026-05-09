@@ -5,10 +5,11 @@ import ProofCard from './ProofCard'
 export const revalidate = 0
 
 interface Props {
-  params: { proof_id: string }
+  params: Promise<{ proof_id: string }>
 }
 
-export default async function ProofPage({ params }: Props) {
+export default async function ProofPage(props: Props) {
+  const params = await props.params;
   const { proof_id } = params
 
   const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
